@@ -175,7 +175,7 @@ var submitWorkTasks = function(sortedWorkTasks, callback) {
 
 
                     var tweet = '@' + options.user.twitter.username + ' about ' + (pctActive/100) +
-                        '% of their followers are active (MAUs), and about ' + (pctActiveQuality/100) + '% are quality actuve users.';
+                        '% of their followers are active (MAUs), and about ' + (pctActiveQuality/100) + '% are quality active users.';
 
 
                     twitterBotClient.post('/statuses/update', {
