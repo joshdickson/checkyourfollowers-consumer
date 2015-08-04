@@ -1,0 +1,19 @@
+{
+    "name": "CheckYourFollowersListener",
+    "version": "0.0.1",
+    "description": "Request listener for check your followers...",
+    "main": "app.js",
+    "author": "Joshua Dickson",
+    "private": true,
+    "dependencies": {
+        "express": "~4.13.3",
+        "twitter": "~1.2.5",
+        "underscore": "~1.8.3",
+        "morgan": "~1.6.1",
+        "mongoose": "~4.1.0",
+        "connect-mongo": "~0.8.2"
+    },
+    "engines": {
+        "node": "~0.12.7"
+    }
+}
