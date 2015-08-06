@@ -141,7 +141,9 @@ var submitWorkTasks = function(sortedWorkTasks, callback) {
                     twitterBotClient.post('/statuses/update', {
 							in_reply_to_status_id: options.request.tweetID,
 							status: tweet
-					});
+					}, function(err, result) {
+                        console.log('Tweet sent: ' + tweet);
+                    });
 
                     // mark the change and finish the save operation...
                     options.request.status = 'failed';
@@ -181,7 +183,9 @@ var submitWorkTasks = function(sortedWorkTasks, callback) {
                     twitterBotClient.post('/statuses/update', {
 							in_reply_to_status_id: options.request.tweetID,
 							status: tweet
-					});
+					}, function(err, result) {
+                        console.log('Tweet sent: ' + tweet);
+                    });
 
 
                     // mark the change and finish the save operation...

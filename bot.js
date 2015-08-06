@@ -7,9 +7,9 @@
  var Twitter = require('twitter'),
      _ = require('underscore');
 
- var getFollowerIDs = function(params, options, callback) {
+ var getFollowerIDs = function(params, client, callback) {
 
-     options.client.get('/followers/ids', params, function(err, response) {
+     client.get('/followers/ids', params, function(err, response) {
 
          if(err) return callback(err);
 
@@ -114,6 +114,8 @@
 
      if(idSet.length > 100) {
 
+         console.log('Crawling w/ idSet of : ' + idSet.length);
+
          // take the first 100 & update idSet to call it again...
          var subset = idSet.splice(0, 100);
 
@@ -177,9 +179,10 @@
 
  };
 
- var crawlFollowerIDs = function(params, options, callback) {
+ var crawlFollowerIDs = function(params, client, callback) {
 
-     getFollowerIDs(params, options, function(err, response) {
+
+     getFollowerIDs(params, client, function(err, response) {
 
          if(err && err[0] && err[0].code == 88) {
 
@@ -187,7 +190,7 @@
 
              setTimeout(function() {
 
-                 crawlFollowerIDs(params, options, callback);
+                 crawlFollowerIDs(params, client, callback);
 
              }, 60000);
 
@@ -197,25 +200,98 @@
              callback(err);
          }
 
-         else if(response.nextCursorString != '0') {
-
-             options.followerIDs = _.union(options.followerIDs, response.idSet);
-
-             crawlFollowerIDs({ screen_name: options.twitterName, cursor: response.nextCursorString, stringify_ids: true  }, options, callback);
-
-         }
-
          else {
 
-            options.followerIDs = _.union(options.followerIDs, response.idSet);
-
-            callback(null, options);
+             callback(null, response);
 
          }
+
+        //  else if(response.nextCursorString != '0') {
+         //
+        //      options.followerIDs = _.union(options.followerIDs, response.idSet);
+         //
+        //     //  crawlFollowerIDs({ screen_name: options.twitterName, cursor: response.nextCursorString, stringify_ids: true  }, options, callback);
+        //
+        //
+         //
+        //  }
+         //
+        //  else {
+         //
+        //     options.followerIDs = _.union(options.followerIDs, response.idSet);
+         //
+        //     callback(null, options);
+         //
+        //  }
 
      });
 
  };
+
+
+
+// function takes in a set of info & cursors and trackers, then gets the request and fills it, then either calls itself
+// if there is another cursor, or calls the final callback with the end result
+var runQueryForCursor = function(twitterName, cursor, client, solutionSet, callback) {
+
+        // do work...
+        crawlFollowerIDs(
+            {
+                screen_name: twitterName,
+                cursor: cursor,
+                stringify_ids: true
+            },
+            client,
+            function(err, response) {
+
+                if(err) return callback(err);
+
+                crawlActiveFollowersFromIDs(response.idSet,
+                    {
+                        client: client,
+                        monthlyActive: 0,
+                        monthlyInactive: 0,
+                        monthlyActiveQuality: 0,
+
+                    }, function(err, results) {
+
+                        if(err) callback(err);
+
+                        else if(response.nextCursorString != '0') {
+
+                            // console.log(results);
+
+                            // console.log(response);
+
+                            solutionSet.monthlyActive += results.monthlyActive;
+                            solutionSet.monthlyInactive += results.monthlyInactive;
+                            solutionSet.monthlyActiveQuality += results.monthlyActiveQuality;
+
+
+                            runQueryForCursor(twitterName, response.nextCursorString, client, solutionSet, callback);
+
+
+                        }
+
+                        else {
+
+                            solutionSet.monthlyActive += results.monthlyActive;
+                            solutionSet.monthlyInactive += results.monthlyInactive;
+                            solutionSet.monthlyActiveQuality += results.monthlyActiveQuality;
+
+
+                            callback(null, solutionSet)
+
+                        }
+
+
+                    });
+
+            }
+        );
+
+};
+
 
 
 module.exports = {
@@ -226,35 +302,20 @@ module.exports = {
 
         var client = new Twitter(options.twitterConfig);
 
-        crawlFollowerIDs(
-            {
-                screen_name: twitterName,
-                cursor: -1,
-                stringify_ids: true
-            },
-            {
-                client: client,
-                twitterName: options.twitterScreenName,
-                followerIDs: [],
-            },
-            function(err, result) {
+        runQueryForCursor(twitterName, -1, client, { monthlyActive: 0, monthlyInactive: 0, monthlyActiveQuality: 0 }, function(err, response) {
 
-                if(err) return callback(err, options);
+            if(err) console.log(err);
 
-                crawlActiveFollowersFromIDs(result.followerIDs,
-                    {
-                        client: client,
-                        monthlyActive: 0,
-                        monthlyInactive: 0,
-                        monthlyActiveQuality: 0,
+            else {
 
-                    }, function(err, results) {
-                        callback(err, options, results);
-                    });
+                callback(null, options, response);
 
             }
-        );
 
+
+
+
+        })
 
     }
 
