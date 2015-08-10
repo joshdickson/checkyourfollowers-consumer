@@ -1,5 +1,4 @@
 // set up
-
 var port = process.env.PORT;
 var botName = process.env.TWITTER_SCREEN_NAME;
 
@@ -26,6 +25,8 @@ var twitterBotClient = new Twitter({
     access_token_secret: process.env.BOT_ACCESS_TOKEN_SECRET,
 });
 
+var globalCredentialSet = {};
+
 
 var getTasks = function(callback) {
 
@@ -36,22 +37,44 @@ var getTasks = function(callback) {
         else {
 
             var tasks = [];
+            var userCredentialSet = [];
+
+            var inspection = process.memoryUsage();
+
+            console.log('Memory Usage: ' + (inspection.heapUsed / inspection.heapTotal));
 
             _.each(userSet, function(user) {
 
                 var taskSubmitted;
+
+                // push the user credential set into the total set...
+                userCredentialSet.push({
+                    token : user.twitter.token,
+                    tokenSecret: user.twitter.tokenSecret
+                });
+
 
                 _.each(user.requests, function(request) {
 
                     // if there is no status, add to work queue...
                     if(!request.status && !taskSubmitted) {
 
-                        taskSubmitted = true;
+                        if(request.request.indexOf(' ') > -1 || request.request.indexOf('!') > -1 || request.request.indexOf('#') > -1) {
 
-                        tasks.push({
-                            user: user,
-                            request: request
-                        });
+                            request.status = 'failedparse';
+
+                            user.save();
+
+                        } else {
+
+                            taskSubmitted = true;
+
+                            tasks.push({
+                                user: user,
+                                request: request
+                            });
+
+                        }
 
                     }
 
@@ -78,7 +101,7 @@ var getTasks = function(callback) {
                 return task.request.requestTime;
             });
 
-            callback(null, tasks);
+            callback(null, tasks, userCredentialSet);
 
         }
 
@@ -86,10 +109,10 @@ var getTasks = function(callback) {
 
 };
 
-var submitWorkTasks = function(sortedWorkTasks, callback) {
+var submitWorkTasks = function(sortedWorkTasks, credentialSet, callback) {
 
     // while we're not at the workQueue limit, enqueue tasks...
-    while(workQueue.length < 25 && !_.isEmpty(sortedWorkTasks)) {
+    while(workQueue.length < 40 && !_.isEmpty(sortedWorkTasks)) {
 
         // grab the first task...
         var thisTask = sortedWorkTasks.shift();
@@ -115,12 +138,7 @@ var submitWorkTasks = function(sortedWorkTasks, callback) {
 
                 twitterScreenName: thisTask.request.request,
 
-                twitterConfig: {
-                    consumer_key: process.env.TWITTER_CONSUMER_KEY,
-                    consumer_secret: process.env.TWITTER_CONSUMER_SECRET,
-                    access_token_key: thisTask.user.twitter.token,
-                    access_token_secret: thisTask.user.twitter.tokenSecret
-                },
+                credentialSet: credentialSet,
 
                 id: thisWorkRandomString,
 
@@ -132,7 +150,7 @@ var submitWorkTasks = function(sortedWorkTasks, callback) {
 
                 // if error, dequeue and report the error...
                 if(err && err[0] && err[0].code == 34) {
-
+                //
                     var thisWorkQueueTask = _.findWhere(workQueue, { id: options.id });
                     workQueue = _.without(workQueue, thisWorkQueueTask);
 
@@ -149,8 +167,8 @@ var submitWorkTasks = function(sortedWorkTasks, callback) {
                     options.request.status = 'failed';
 
                     options.user.save();
-
-
+                //
+                //
                 }
 
                 else if(err) {
@@ -162,6 +180,8 @@ var submitWorkTasks = function(sortedWorkTasks, callback) {
                     options.request.status = 'failedunknown';
 
                     options.user.save();
+
+
                 }
 
                 else {
@@ -177,7 +197,7 @@ var submitWorkTasks = function(sortedWorkTasks, callback) {
 
 
                     var tweet = '@' + options.user.twitter.username + ' about ' + (pctActive/100) +
-                        '% of their followers are active (MAUs), and about ' + (pctActiveQuality/100) + '% are quality active users.';
+                        '% of their followers are actively engaged recently, and about ' + (pctActiveQuality/100) + '% are quality, actively engaged users.';
 
 
                     twitterBotClient.post('/statuses/update', {
@@ -207,19 +227,26 @@ var submitWorkTasks = function(sortedWorkTasks, callback) {
 
 var doWork = function() {
 
-    getTasks(function(err, sortedWorkTasks) {
+    try {
 
-        submitWorkTasks(sortedWorkTasks, function() {
+        getTasks(function(err, sortedWorkTasks, credentialSet) {
 
-            console.log('Current Work queue length: ' + workQueue.length);
+            globalCredentialSet = credentialSet;
 
-            setTimeout(function() {
-                doWork();
-            }, 30000);
+            submitWorkTasks(sortedWorkTasks, globalCredentialSet, function() {
+
+                setTimeout(function() {
+                    doWork();
+                }, 10000);
+
+            });
 
         });
 
-    });
+    } catch(err) {
+        console.log('###########');
+        console.log(err);
+    }
 
 };
 
